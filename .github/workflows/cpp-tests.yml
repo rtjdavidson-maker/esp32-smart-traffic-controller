@@ -1,0 +1,14 @@
+name: Traffic Controller C++ Tests
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build unit tests
+        run: g++ -std=c++17 -Wall -Wextra -Werror -o traffic-tests tests/test_traffic_logic.cpp
+      - name: Run unit tests
+        run: ./traffic-tests
