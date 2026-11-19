@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ESP32 Traffic Controller | Simulator</title>
+<style>
+:root{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#eaf2fa;background:#0b1424}
+*{box-sizing:border-box}body{margin:0}main{max-width:1040px;margin:28px auto;padding:0 20px}h1{font-size:clamp(1.5rem,4vw,2.3rem);margin-bottom:5px}.sub{color:#9fb2c8;margin-top:0}header{margin-bottom:25px}
+.layout{display:grid;grid-template-columns:minmax(280px,1fr) minmax(260px,1fr);gap:18px}
+.card{background:#182840;border:1px solid #34506f;border-radius:16px;padding:22px;margin-bottom:16px}
+.intersection{display:flex;align-items:center;justify-content:space-around;gap:16px;min-height:310px}
+.traffic{background:#0a111c;border-radius:28px;padding:16px;display:grid;gap:13px;border:3px solid #42536c}
+.lamp{height:58px;width:58px;border-radius:50%;background:#293448;border:3px solid #53657c;box-shadow:inset 0 4px 12px #030610}
+.lamp.red.on{background:#ff4858;box-shadow:0 0 25px #ff485899}
+.lamp.yellow.on{background:#ffd44f;box-shadow:0 0 25px #ffd44f88}
+.lamp.green.on{background:#33d694;box-shadow:0 0 25px #33d69488}
+.heading{text-align:center;color:#c5d7ec;font-size:.87rem;margin-bottom:12px}
+.ped{display:flex;gap:14px;align-items:center;background:#111c2c;padding:15px;border-radius:12px;margin-top:14px}
+.walk{width:29px;height:29px;border-radius:7px;background:#33465d;border:2px solid #74879d}.walk.on{background:#42eab2;box-shadow:0 0 16px #42eab277}
+button,select{border:1px solid #6582a3;background:#263f61;color:#fff;padding:12px 14px;border-radius:10px;font-size:1rem;cursor:pointer}button:hover{background:#365c87}button:focus-visible,select:focus-visible{outline:3px solid #f9d478}button.primary{background:#147b5e;border-color:#26b08a}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}label{display:inline-flex;align-items:center;gap:8px}.stat{font-size:1.8rem;font-weight:750}.small{color:#aabbd0;font-size:.9rem} .tag{background:#324968;border-radius:8px;padding:5px 8px}
+.progress{height:13px;background:#344962;border-radius:15px;overflow:hidden;margin:12px 0 20px}.fill{height:100%;width:0;background:#41a9e2;transition:width .12s linear}
+.log{margin:10px 0 0;padding:0;list-style:none;max-height:220px;overflow:auto}.log li{border-bottom:1px solid #34465b;padding:7px 0;color:#bfd1e6;font-size:.89rem}
+.safety{color:#d6dfea;font-size:.89rem;line-height:1.5}.status{color:#71e6b7;font-weight:650}
+@media(max-width:760px){.layout{grid-template-columns:1fr}.intersection{min-height:260px}.lamp{width:48px;height:48px}}
+</style></head>
+<body><main><header><h1>🚦 ESP32 Smart Traffic Controller</h1><p class="sub">Interactive software simulator • Embedded C++ project companion • No hardware required</p></header>
+<div class="layout"><section><div class="card"><h2>Intersection signals</h2><div class="intersection">
+<div><div class="heading">NORTH / SOUTH</div><div class="traffic"><div id="ns-red" class="lamp red" aria-label="North-south red"></div><div id="ns-yellow" class="lamp yellow" aria-label="North-south yellow"></div><div id="ns-green" class="lamp green" aria-label="North-south green"></div></div></div>
+<div><div class="heading">EAST / WEST</div><div class="traffic"><div id="ew-red" class="lamp red" aria-label="East-west red"></div><div id="ew-yellow" class="lamp yellow" aria-label="East-west yellow"></div><div id="ew-green" class="lamp green" aria-label="East-west green"></div></div></div>
+</div><div class="ped"><div class="walk" id="ped-lamp"></div><span><strong>Pedestrian WALK</strong><br><span class="small" id="ped-status">Waiting for request</span></span></div></div></section>
+<section><div class="card"><h2>Controller state</h2><div class="small">Current phase</div><div id="phase" class="stat" aria-live="polite">North / South GREEN</div><div class="small">Time remaining: <strong id="remaining">6.0 s</strong></div><div class="progress"><div class="fill" id="progress"></div></div>
+<p><span class="tag" id="request">No pedestrian request queued</span></p>
+<div class="controls"><button class="primary" id="ped-button">Request pedestrian crossing</button></div>
+<div class="controls"><button id="pause">Pause</button><button id="reset">Reset</button><label for="speed">Speed <select id="speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label></div>
+<p class="safety"><span class="status" id="safety-status">Safety check: vehicle greens mutually exclusive</span><br>Pedestrian WALK activates only after all-red clearance, with both road signals red.</p></div>
+<div class="card"><h2>Event log</h2><ul class="log" id="log" aria-live="polite"></ul></div></section></div>
+<p class="safety">Educational simulation. Never use this software to control real roads or safety-critical traffic signals. Browser JavaScript illustrates the same logical phases as the C++ firmware; it is not compiled ESP32 firmware.</p></main>
+<script>
+'use strict';
+const durations={NS_GREEN:6000,NS_YELLOW:2000,ALL_RED:1000,EW_GREEN:6000,EW_YELLOW:2000,WALK:4000};
+const names={NS_GREEN:'North / South GREEN',NS_YELLOW:'North / South YELLOW',ALL_RED:'All RED clearance',EW_GREEN:'East / West GREEN',EW_YELLOW:'East / West YELLOW',WALK:'Pedestrian WALK'};
+let phase='NS_GREEN',nextAfterRed='EW_GREEN',elapsed=0,pedPending=false,paused=false,speed=1;
+const el=id=>document.getElementById(id);
+function log(text){const li=document.createElement('li');li.textContent=new Date().toLocaleTimeString()+' — '+text;el('log').prepend(li);while(el('log').children.length>12)el('log').lastElementChild.remove()}
+function setPhase(p){phase=p;log(names[p])}
+function advance(){
+switch(phase){
+case 'NS_GREEN':setPhase('NS_YELLOW');break;
+case 'NS_YELLOW':nextAfterRed='EW_GREEN';setPhase('ALL_RED');break;
+case 'EW_GREEN':setPhase('EW_YELLOW');break;
+case 'EW_YELLOW':nextAfterRed='NS_GREEN';setPhase('ALL_RED');break;
+case 'ALL_RED':if(pedPending){pedPending=false;setPhase('WALK')}else setPhase(nextAfterRed);break;
+case 'WALK':setPhase(nextAfterRed);break;
+}}
+function tick(ms){while(ms>0){const left=durations[phase]-elapsed,step=Math.min(ms,left);elapsed+=step;ms-=step;if(elapsed>=durations[phase]){elapsed=0;advance()}}render()}
+function lamp(id,on){el(id).classList.toggle('on',on)}
+function render(){const nsg=phase==='NS_GREEN',nsy=phase==='NS_YELLOW',ewg=phase==='EW_GREEN',ewy=phase==='EW_YELLOW';lamp('ns-red',!nsg&&!nsy);lamp('ns-yellow',nsy);lamp('ns-green',nsg);lamp('ew-red',!ewg&&!ewy);lamp('ew-yellow',ewy);lamp('ew-green',ewg);el('ped-lamp').classList.toggle('on',phase==='WALK');el('phase').textContent=names[phase];el('remaining').textContent=((durations[phase]-elapsed)/1000).toFixed(1)+' s';el('progress').style.width=(elapsed/durations[phase]*100)+'%';el('request').textContent=pedPending?'Pedestrian request queued':'No pedestrian request queued';el('ped-status').textContent=phase==='WALK'?'Safe to walk':'Do not walk';const safe=!(nsg&&ewg)&&!(phase==='WALK'&&(nsg||ewg));el('safety-status').textContent=safe?'Safety check: no conflicting greens':'SAFETY ERROR';el('safety-status').style.color=safe?'#71e6b7':'#ff8796';el('pause').textContent=paused?'Resume':'Pause'}
+el('ped-button').addEventListener('click',()=>{pedPending=true;log('Pedestrian request queued');render()});
+el('pause').addEventListener('click',()=>{paused=!paused;render()});
+el('reset').addEventListener('click',()=>{phase='NS_GREEN';nextAfterRed='EW_GREEN';elapsed=0;pedPending=false;paused=false;el('log').textContent='';log('Controller reset');render()});
+el('speed').addEventListener('change',e=>{speed=Number(e.target.value)});
+let last=performance.now();
+function frame(now){const delta=Math.min(now-last,250);last=now;if(!paused)tick(delta*speed);requestAnimationFrame(frame)}
+log('Controller started');render();requestAnimationFrame(frame);
+</script></body></html>
