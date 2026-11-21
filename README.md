@@ -53,6 +53,28 @@ g++ -std=c++17 -Wall -Wextra -Werror -o traffic-tests tests/test_traffic_logic.c
 ./traffic-tests
 ```
 
+## Simulator screenshots and pedestrian crossing demonstration
+
+These screenshots were captured from the locally running **browser simulator**. They demonstrate the traffic-control sequence and the queued pedestrian request; they are **not evidence of testing on a physical ESP32**.
+
+### Normal traffic operation
+
+![Interactive controller showing timed vehicle signals](Screenshot%202026-11-19%20132458.png)
+
+![Simulator event log showing signal phase transitions](Screenshot%202026-11-19%20132528.png)
+
+### Pedestrian Crossing Safety Demonstration
+
+**1. Pedestrian request queued during vehicle GREEN.** The North/South signal remains green, East/West stays red, and the WALK signal is off while the request is pending.
+
+![Pedestrian crossing queued while vehicle traffic is green](Screenshot%202026-11-19%20132739.png)
+
+**2. Pedestrian WALK after all-red clearance.** Both vehicle signals display red while WALK is active. The event log shows the all-red phase occurred before WALK.
+
+![Pedestrian WALK active with both vehicle signals red](Screenshot%202026-11-19%20132757.png)
+
+The desktop C++ unit tests also cover the phase transitions, pedestrian requests, and prevention of conflicting vehicle greens. A real-world safety certification or physical hardware test has **not** been performed.
+
 ## Future physical ESP32 wiring (not yet verified)
 
 | Signal | GPIO |
