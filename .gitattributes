@@ -1,4 +1,8 @@
-# Treat ESP32 Arduino sketches and controller headers as C++ source for GitHub Linguist.
+# Explicitly classify the ESP32 Arduino firmware and C++ state-machine headers.
 *.ino linguist-language=C++
 *.h linguist-language=C++
 *.hpp linguist-language=C++
+
+# The browser simulator is a companion visualization, not the primary firmware.
+# Keep it browsable on GitHub but exclude its bytes from language percentages.
+simulator/index.html linguist-vendored
